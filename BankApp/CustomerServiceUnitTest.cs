@@ -1,24 +1,45 @@
+using DiaryApp.Data;
 using DiaryApp.Models;
 using DiaryApp.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace BankApp
 {
-    [Collection("Sequential")]
     public class CustomerServiceUnitTest : IDisposable
     {
         private readonly CustomerService _customerService;
+        private readonly AppDbContext _db;
 
         public CustomerServiceUnitTest()
         {
-            _customerService = new CustomerService();
-            // Reset data to initial state before each test
-            DataStore.InitializeData();
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            _db = new AppDbContext(options);
+            SeedData();
+            _customerService = new CustomerService(_db);
+        }
+
+        private void SeedData()
+        {
+            var customer1 = new Customer { Id = 1, Name = "John Doe", Email = "john.doe@example.com" };
+            var customer2 = new Customer { Id = 2, Name = "Jane Smith", Email = "jane.smith@example.com" };
+            var customer3 = new Customer { Id = 3, Name = "Carlos Rivera", Email = "carlos.rivera@example.com" };
+            var customer4 = new Customer { Id = 4, Name = "Emily Chen", Email = "emily.chen@example.com" };
+            _db.Customers.AddRange(customer1, customer2, customer3, customer4);
+            _db.Accounts.AddRange(
+                new Account { Id = 1, AccountNumber = 1001, AccountType = AccountType.Savings, Balance = 5000, CustomerId = 1 },
+                new Account { Id = 2, AccountNumber = 1002, AccountType = AccountType.Savings, Balance = 8000, CustomerId = 2 },
+                new Account { Id = 3, AccountNumber = 1003, AccountType = AccountType.Checking, Balance = 4500, CustomerId = 2 },
+                new Account { Id = 4, AccountNumber = 1004, AccountType = AccountType.Checking, Balance = 1200, CustomerId = 3 },
+                new Account { Id = 5, AccountNumber = 1005, AccountType = AccountType.Savings, Balance = 15000, CustomerId = 4 }
+            );
+            _db.SaveChanges();
         }
 
         public void Dispose()
         {
-            // Reset data to initial state after each test
-            DataStore.InitializeData();
+            _db.Dispose();
         }
 
         #region GetAll Tests
@@ -31,14 +52,16 @@ namespace BankApp
             // Assert
             Assert.NotNull(result);
             Assert.NotEmpty(result);
-            Assert.Equal(DataStore.Customers.Count, result.Count);
+            Assert.Equal(_db.Customers.Count(), result.Count);
         }
 
         [Fact]
         public void GetAll_WhenNoCustomers_ReturnsEmptyList_Fail()
         {
             // Arrange
-            DataStore.Customers.Clear();
+            _db.Accounts.RemoveRange(_db.Accounts);
+            _db.Customers.RemoveRange(_db.Customers);
+            _db.SaveChanges();
 
             // Act
             var result = _customerService.GetAll();
@@ -127,18 +150,12 @@ namespace BankApp
         [Fact]
         public void GetPremium_WhenNoCustomersQualify_ReturnsEmptyList_Fail()
         {
-            // Arrange - Set all accounts to low balances in both DataStore and Customer objects
-            foreach (var account in DataStore.Accounts)
+            // Arrange - Set all accounts to low balances
+            foreach (var account in _db.Accounts)
             {
                 account.Balance = 5000;
             }
-            foreach (var customer in DataStore.Customers)
-            {
-                foreach (var account in customer.Accounts)
-                {
-                    account.Balance = 5000;
-                }
-            }
+            _db.SaveChanges();
 
             // Act
             var result = _customerService.GetPremium();
@@ -159,22 +176,24 @@ namespace BankApp
                 Name = "New Customer",
                 Email = "new.customer@example.com"
             };
-            int initialCount = DataStore.Customers.Count;
+            int initialCount = _db.Customers.Count();
 
             // Act
             _customerService.Add(newCustomer);
 
             // Assert
-            Assert.Equal(initialCount + 1, DataStore.Customers.Count);
+            Assert.Equal(initialCount + 1, _db.Customers.Count());
             Assert.True(newCustomer.Id > 0);
-            Assert.Contains(newCustomer, DataStore.Customers);
+            Assert.NotNull(_db.Customers.FirstOrDefault(c => c.Id == newCustomer.Id));
         }
 
         [Fact]
         public void Add_ToEmptyList_AssignsIdOne_Pass()
         {
             // Arrange
-            DataStore.Customers.Clear();
+            _db.Accounts.RemoveRange(_db.Accounts);
+            _db.Customers.RemoveRange(_db.Customers);
+            _db.SaveChanges();
             var newCustomer = new Customer
             {
                 Name = "First Customer",
@@ -186,7 +205,7 @@ namespace BankApp
 
             // Assert
             Assert.Equal(1, newCustomer.Id);
-            Assert.Single(DataStore.Customers);
+            Assert.Equal(1, _db.Customers.Count());
         }
         #endregion
 
@@ -237,24 +256,24 @@ namespace BankApp
         {
             // Arrange
             int customerId = 1;
-            var customerAccountIds = DataStore.Accounts
+            var customerAccountIds = _db.Accounts
                 .Where(a => a.CustomerId == customerId)
                 .Select(a => a.Id)
                 .ToList();
-            int initialCustomerCount = DataStore.Customers.Count;
-            int initialAccountCount = DataStore.Accounts.Count;
+            int initialCustomerCount = _db.Customers.Count();
+            int initialAccountCount = _db.Accounts.Count();
 
             // Act
             var result = _customerService.Delete(customerId);
 
             // Assert
             Assert.True(result);
-            Assert.Equal(initialCustomerCount - 1, DataStore.Customers.Count);
-            Assert.Null(DataStore.Customers.FirstOrDefault(c => c.Id == customerId));
+            Assert.Equal(initialCustomerCount - 1, _db.Customers.Count());
+            Assert.Null(_db.Customers.FirstOrDefault(c => c.Id == customerId));
             // Verify customer's accounts are also deleted
             Assert.All(customerAccountIds, accountId =>
             {
-                Assert.Null(DataStore.Accounts.FirstOrDefault(a => a.Id == accountId));
+                Assert.Null(_db.Accounts.FirstOrDefault(a => a.Id == accountId));
             });
         }
 
@@ -263,16 +282,16 @@ namespace BankApp
         {
             // Arrange
             int invalidId = 9999;
-            int initialCustomerCount = DataStore.Customers.Count;
-            int initialAccountCount = DataStore.Accounts.Count;
+            int initialCustomerCount = _db.Customers.Count();
+            int initialAccountCount = _db.Accounts.Count();
 
             // Act
             var result = _customerService.Delete(invalidId);
 
             // Assert
             Assert.False(result);
-            Assert.Equal(initialCustomerCount, DataStore.Customers.Count);
-            Assert.Equal(initialAccountCount, DataStore.Accounts.Count);
+            Assert.Equal(initialCustomerCount, _db.Customers.Count());
+            Assert.Equal(initialAccountCount, _db.Accounts.Count());
         }
         #endregion
     }

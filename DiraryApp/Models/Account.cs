@@ -13,6 +13,6 @@
         public AccountType AccountType { get; set; }
 
         public int CustomerId { get; set; }
-        public int Balance { get; set; }
+        public decimal Balance { get; set; }
     }
 }
