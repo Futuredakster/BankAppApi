@@ -4,13 +4,13 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
-COPY ["BankApp.csproj", "."]
-RUN dotnet restore "./BankApp.csproj"
+COPY ["DiraryApp/BankApp.csproj", "DiraryApp/"]
+RUN dotnet restore "DiraryApp/BankApp.csproj"
 COPY . .
-RUN dotnet build "BankApp.csproj" -c Release -o /app/build
+RUN dotnet build "DiraryApp/BankApp.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "BankApp.csproj" -c Release -o /app/publish
+RUN dotnet publish "DiraryApp/BankApp.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
