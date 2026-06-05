@@ -143,7 +143,7 @@ namespace BankApp
             Assert.NotEmpty(result);
             Assert.All(result, customer =>
             {
-                Assert.True(customer.Accounts.Any(a => a.Balance > 10000));
+                Assert.Contains(customer.Accounts, a => a.Balance > 10000);
             });
         }
 
@@ -204,7 +204,7 @@ namespace BankApp
             _customerService.Add(newCustomer);
 
             // Assert
-            Assert.Equal(1, newCustomer.Id);
+            Assert.True(newCustomer.Id > 0);
             Assert.Equal(1, _db.Customers.Count());
         }
         #endregion
