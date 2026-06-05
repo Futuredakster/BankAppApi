@@ -1,4 +1,5 @@
 using DiaryApp.Models;
+using BankApp.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace DiaryApp.Data
@@ -9,6 +10,7 @@ namespace DiaryApp.Data
 
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Account> Accounts { get; set; }
+        public DbSet<Users> Users { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

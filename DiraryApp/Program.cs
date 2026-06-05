@@ -1,6 +1,9 @@
 using DiaryApp.Data;
 using DiaryApp.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +30,24 @@ builder.Services.AddControllersWithViews()
     });
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<UserService>();
+
+// Tell ASP.NET Core how to validate incoming JWTs on protected routes
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        };
+    });
 
 
 builder.Services.AddEndpointsApiExplorer();
@@ -53,6 +74,7 @@ app.UseRouting();
 
 app.UseCors("AllowFrontend");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
@@ -62,5 +84,15 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
+// Seed a default admin user if the Users table is empty
+using (var scope = app.Services.CreateScope())
+{
+    var userService = scope.ServiceProvider.GetRequiredService<UserService>();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (!db.Users.Any())
+    {
+        userService.Register("admin", "password123");
+    }
+}
 
 app.Run();
